@@ -1,0 +1,22 @@
+{
+  "Data": {
+    "n_events": 1362611,
+    "n_selected": 1279,
+    "hist_sum": 822.0
+  },
+  "Background $Z,t\\bar{t},t\\bar{t}+V,VVV$": {
+    "n_events": 195814,
+    "n_selected": 6071,
+    "hist_sum": 97.45803175139994
+  },
+  "Background $ZZ^{*}$": {
+    "n_events": 11260,
+    "n_selected": 6365,
+    "hist_sum": 639.0654021568936
+  },
+  "Signal ($m_H$ = 125 GeV)": {
+    "n_events": 532629,
+    "n_selected": 226168,
+    "hist_sum": 28.83477994103633
+  }
+}

@@ -1,0 +1,8 @@
+atlasopenmagic
+uproot
+awkward
+vector
+numpy
+matplotlib
+requests
+dask[distributed]
