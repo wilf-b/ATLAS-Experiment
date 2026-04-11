@@ -21,18 +21,25 @@ from worker import process_one_file
 
 
 def parse_args():
+    '''
+    This function allows the user to parse additional args to the analysis workflow controlling:
+    - the scheduler address
+    - the total num of files processed
+    - the output directory 
+    '''
     parser = argparse.ArgumentParser(description="Run the distributed HZZ analysis with Dask.")
-    parser.add_argument("--scheduler", default=None, help="Dask scheduler address, e.g. tcp://scheduler:8786")
-    parser.add_argument("--limit-files", type=int, default=None, help="Only process the first N files per sample")
-    parser.add_argument("--output-dir", default="results", help="Directory for plots and summary outputs")
+    parser.add_argument("--scheduler", default=None) # Dask scheduler address, e.g. tcp://scheduler:8786
+    parser.add_argument("--limit-files", type=int, default=None) # process the first N files per sample
+    parser.add_argument("--output-dir", default="results") # Directory for plots and summary outputs
     return parser.parse_args()
 
 
-def build_jobs(limit_files: int | None = None) -> tuple[Dict[str, dict], List[tuple[str, str]]]:
-    atom.set_release(RELEASE)
+def build_jobs(limit_files):
 
-    samples = atom.build_dataset(DEFS, skim=SKIM, protocol="https", cache=True)
-    # review
+    atom.set_release(RELEASE) # sets which data release to use 
+    samples = atom.build_dataset(DEFS, skim=SKIM, protocol="https", cache=True) # builds data dict from DEFS
+
+
     jobs: List[tuple[str, str]] = []
     for sample_name, sample_info in samples.items():
         file_list = sample_info["list"][:limit_files] if limit_files else sample_info["list"]
@@ -42,10 +49,13 @@ def build_jobs(limit_files: int | None = None) -> tuple[Dict[str, dict], List[tu
 
 
 def merge_results(results: list[dict]):
-    #what
+    '''
+    adds all filelevel outputs into one result per sample. and retunrs merged
+    '''
     merged: dict = {}
     for result in results:
         sample = result["sample"]
+        # If a sample appears for the first time creates storage for it.
         if sample not in merged:
             merged[sample] = {
                 "hist": np.zeros_like(result["hist"]),
@@ -63,21 +73,24 @@ def merge_results(results: list[dict]):
 
 
 def plot_results(samples, merged, output_dir):
-    if "Data" not in merged:
-        raise ValueError("No Data histogram found in merged results")
-
+    '''
+    PLotting function that takes the merged dataset, and returns the hist to the output path
+    independintly configs:
+    - background 
+        - uncertainty
+    - text formatting for plot
+    - axes and ranges 
+    '''
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # -------------------
     # Data
-    # -------------------
     data_hist = merged["Data"]["hist"]
     data_err = np.sqrt(merged["Data"]["sumw2"])
     ax.errorbar(BIN_CENTRES, data_hist, yerr=data_err, fmt="ko", label="Data")
 
-    # -------------------
+
     # Backgrounds
-    # -------------------
+
     background_names = [s for s in samples if s not in ["Data", "Signal (mH = 125 GeV)"]]
 
     bg_hists = []
@@ -88,7 +101,7 @@ def plot_results(samples, merged, output_dir):
         if s in merged:
             bg_hists.append(merged[s]["hist"])
             bg_colors.append(samples[s]["color"])
-            bg_labels.append(s.replace("$", "").replace("\\", ""))  # sanitize just in case
+            bg_labels.append(s.replace("$", "$").replace("\\", "\\"))  # sanitize just in case
 
     cumulative = np.zeros_like(data_hist, dtype=float)
 
@@ -104,46 +117,30 @@ def plot_results(samples, merged, output_dir):
         )
         cumulative += hist
 
-    # -------------------
-    # Background uncertainty band
-    # -------------------
+
+    # Background uncertainty banding
+
+    #tweaked the logic of the error bounds to be simpler
     bg_sumw2 = np.zeros_like(data_hist, dtype=float)
-    for s in background_names:
-        if s in merged:
-            bg_sumw2 += merged[s]["sumw2"]
+    for i in background_names:
+        if i in merged:
+            bg_sumw2 += merged[i]["sumw2"]
 
     bg_err = np.sqrt(bg_sumw2)
 
     ax.bar(
-        BIN_CENTRES,
-        2 * bg_err,
+        BIN_CENTRES, # x
+        2 * bg_err, # heights
         bottom=cumulative - bg_err,
         width=STEP_SIZE,
         color="none",
         edgecolor="black",
         hatch="////",
-        alpha=0.4,
+        alpha=0.5, # half transparency
         label="Stat. Unc.",
     )
 
-    # -------------------
-    # Signal
-    # -------------------
-    signal_name = "Signal (mH = 125 GeV)"
-
-    if signal_name in merged:
-        ax.step(
-            BIN_EDGES[:-1],
-            merged[signal_name]["hist"],
-            where="post",
-            color=samples[signal_name]["color"],
-            linewidth=2,
-            label=signal_name,
-        )
-
-    # ------------------
     # Performative Formatting
-    # -----------------
 
     # Add text 'ATLAS Open Data' on plot
     plt.text(0.1, # x
@@ -173,13 +170,11 @@ def plot_results(samples, merged, output_dir):
             r'$H \rightarrow ZZ^* \rightarrow 4\ell$', # text
             transform=ax.transAxes,fontsize=16 ) # coordinate system used is that of main_axes
 
-    # -------------------
-    # Axes formatting
-    # -------------------
+    # Axes
     ax.set_xlim(left=XMIN, right=XMAX)
 
     ymax = max(float(np.max(data_hist)), float(np.max(cumulative)))
-    ax.set_ylim(bottom=0, top=max(1.0, ymax * 1.1))
+    ax.set_ylim(bottom=0, top=max(1.0, ymax * 1.3))
 
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.yaxis.set_minor_locator(AutoMinorLocator())
@@ -189,53 +184,52 @@ def plot_results(samples, merged, output_dir):
     ax.set_xlabel("4-lepton invariant mass m4l [GeV]", fontsize=13, x=1, ha="right")
     ax.set_ylabel(f"Events / {STEP_SIZE} GeV", y=1, ha="right")
 
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=16 ) # no box around the legend
 
-    # -------------------
-    # Save
-    # -------------------
-    plot_path = output_dir / "hzz_mass_plot.png"
+    # save
+    plot_path = output_dir / "hzz_mass_plot.png" # outputs plot along provided path
 
     fig.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
     return plot_path
 
-def write_summary(merged, output_dir):
-    summary = {}
-    for sample, result in merged.items():
-        summary[sample] = {
-            "n_events": int(result["n_events"]),
-            "n_selected": int(result["n_selected"]),
-            "hist_sum": float(np.sum(result["hist"])),
-        }
-    summary_path = output_dir / "summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2))
-    return summary_path
-
 
 def main():
+    '''
+    main f that calls all relevant functions to 
+    '''
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     samples, jobs = build_jobs(limit_files=args.limit_files)
-    if not jobs:
-        raise RuntimeError("No jobs were built from the dataset definitions.")
+    
+    # Create a Dask client
+    if args.scheduler:
+        client = Client(args.scheduler)
+    else:
+        client = Client()
 
-    client = Client(args.scheduler) if args.scheduler else Client()
-    print(client)
+    print(client) # <Client: 'tcp://127.0.0.1:33779' processes=4 threads=12, memory=7.60 GiB>
+
+    # Submit one task per input file
     print(f"Submitting {len(jobs)} file-level tasks")
 
-    futures = [client.submit(process_one_file, file_string, sample_name) for file_string, sample_name in jobs]
+    futures = []
+    for file_string, sample_name in jobs:
+        future = client.submit(process_one_file, file_string, sample_name)
+        futures.append(future)
+
+    # collect results from workers
     results = client.gather(futures)
+
+    # Merge file-level results into sample-level histograms
     merged = merge_results(results)
 
     plot_path = plot_results(samples, merged, output_dir)
-    summary_path = write_summary(merged, output_dir)
 
     print(f"Saved plot to {plot_path}")
-    print(f"Saved summary to {summary_path}")
 
     client.close()
 
