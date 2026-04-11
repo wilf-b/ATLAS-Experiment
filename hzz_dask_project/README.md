@@ -6,9 +6,8 @@ This is a minimal implementation of the ATLAS HZZ analysis as a file-parallel di
 
 - `run_dask.py` is the driver.
 - `worker.py` contains the file-level processing logic.
-- Dask scheduler distributes one ROOT file per task.
-- Dask workers run `process_one_file(...)`.
-- Docker provides a reproducible environment.
+- Dask scheduler distributes a single ROOT file per task.
+- Dask workers run `process_one_file`.
 
 ## Files
 
@@ -18,7 +17,7 @@ This is a minimal implementation of the ATLAS HZZ analysis as a file-parallel di
 - `Dockerfile` – container image
 - `docker-compose.yml` – scheduler + workers + runner
 
-## Local test without Docker
+## Local run without Docker
 
 Install dependencies:
 
@@ -29,14 +28,14 @@ pip install -r requirements.txt
 Run on a small subset first:
 
 ```bash
-python run_dask.py --limit-files 1
+python run_dask.py
 ```
 
 This starts a local Dask client automatically if `--scheduler` is not provided.
 
 ## Run with Docker Compose
 
-Build and start the distributed system:
+Build and start the distributed system with more args:
 
 ```bash
 docker compose up --build --scale worker=2
@@ -44,14 +43,14 @@ docker compose up --build --scale worker=2
 
 The Dask dashboard should be available at:
 
-```text
+```
 http://localhost:8787
 ```
 
-Outputs are written to `results/`.
+Outputs are written to folder `results/`.
 
 ## Notes
 
-- The implementation follows the notebook structure but accumulates histograms chunk-by-chunk instead of storing all selected events.
-- Workers return compact histogram summaries rather than event-level data.
-- Start with `--limit-files 1` or `--limit-files 2` while debugging.
+- The implementation follows the [Hzz notebook structure](https://github.com/atlas-outreach-data-tools/notebooks-collection-opendata/blob/master/13-TeV-examples/uproot_python/HZZAnalysis.ipynb) 
+- workers accumulates histograms chunk-by-chunk instead of storing all selected events.
+- then return compact histogram summaries rather than event-level data.
