@@ -1,20 +1,52 @@
+# services:
+#   scheduler:
+#     image: daskdev/dask:latest
+#     command: dask-scheduler
+#     ports:
+#       - "8786:8786"
+#       - "8787:8787"
+
+#   worker:
+#     build: .
+#     command: dask-worker tcp://scheduler:8786
+#     depends_on:
+#       - scheduler
+
+#   runner:
+#     build: .
+#     command: python run_dask.py --scheduler tcp://scheduler:8786
+#     depends_on:
+#       - scheduler
+#       - worker
+#     volumes:
+#       - ./results:/app/results
+
 services:
   scheduler:
-    image: daskdev/dask:latest
-    command: dask-scheduler
+    build: .
+    command: dask scheduler
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
     ports:
       - "8786:8786"
       - "8787:8787"
 
   worker:
     build: .
-    command: dask-worker tcp://scheduler:8786
+    command: dask worker tcp://scheduler:8786
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
     depends_on:
       - scheduler
 
-  runner:
+  analysis:
     build: .
     command: python run_dask.py --scheduler tcp://scheduler:8786
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
     depends_on:
       - scheduler
       - worker
