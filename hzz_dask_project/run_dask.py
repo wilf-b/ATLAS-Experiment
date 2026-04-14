@@ -1,4 +1,26 @@
 '''
+Distributed HZZ (H to ZZ* to 4L) analysis driver using Dask.
+
+This script runs the full analysis workflow of ATLAS Open Data using file-level parallelism with Dask.
+Each input ROOT file is processed in parallel on a worker node, and resulting histograms are merged into a final result.
+
+Workflow:
+    1. Build ataset metadata using atlasopenmagic (data, background, signal)
+    2. Create a list of file-level jobs (one task per ROOT file)
+    3. Submit jobs to a Dask scheduler
+    4. Workers execute `process_one_file` on each file
+    5. Collect and merge results into sample-level histograms
+    6. Produce a final invariant mass plot and save outputs
+
+Usage:
+    Local:
+        python run_dask.py
+
+    Distributed (Docker or remote cluster):
+        python run_dask.py --scheduler tcp://<scheduler-address>:8786
+
+Outputs:
+    - Histogram plot: results/hzz_mass_plot.pngd
 
 '''
 
@@ -10,6 +32,8 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
+
+import time
 import atlasopenmagic as atom
 import matplotlib.pyplot as plt
 import numpy as np
@@ -199,12 +223,21 @@ def main():
     '''
     main f that calls all relevant functions to 
     '''
+
+
+    start_total = time.perf_counter()
+
+
+
+
+
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     samples, jobs = build_jobs(limit_files=args.limit_files)
     
+    start_compute = time.perf_counter()
     # Create a Dask client
     if args.scheduler:
         client = Client(args.scheduler)
@@ -218,13 +251,13 @@ def main():
 
     futures = []
     for file_string, sample_name in jobs:
-        future = client.submit(process_one_file, file_string, sample_name, retries=3)
+        future = client.submit(process_one_file, file_string, sample_name)
         futures.append(future)
 
     # collect results from workers
     results = client.gather(futures)
 
-
+    end_compute = time.perf_counter()
     # Merge file-level results into sample-level histograms
     merged = merge_results(results)
 
@@ -232,8 +265,15 @@ def main():
 
     print(f"Saved plot to {plot_path}")
 
+
+    end_total = time.perf_counter()
+
+    print(f"Compute time: {end_compute - start_compute:.2f} s")
+    print(f"Total runtime: {end_total - start_total:.2f} s")
     client.close()
 
 
 if __name__ == "__main__":
     main()
+
+
