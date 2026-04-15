@@ -5,6 +5,8 @@ vector
 numpy
 matplotlib
 requests
-aiohttp
-fsspec[http]
 dask[distributed]
+jupyter
+notebook
+matplotlib-inline
+ipykernel
